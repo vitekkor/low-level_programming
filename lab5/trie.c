@@ -117,7 +117,7 @@ int trie_delete_word(Trie *trie, char *word) {
     }
 
     TrieNode *temp = trie->root;
-    TrieNode *previous;
+    TrieNode *previous = temp;
     TrieNode *previousDel = NULL;
 
     TrieNode *deleteFrom = NULL; // узел, который можно удалить, не повредив дерево
@@ -130,7 +130,6 @@ int trie_delete_word(Trie *trie, char *word) {
             return 0;
         } else {
             // проверяем, можно ли удалить этот узел, не повредив дерево
-            previous = temp;
             int j = 0;
             for (; j < N_CHARACTERS; j++) {
                 if (temp->children[j] != NULL) {
@@ -139,12 +138,18 @@ int trie_delete_word(Trie *trie, char *word) {
             }
             if (j == N_CHARACTERS) {
                 if (deleteFrom == NULL && !temp->is_leaf) {
+                    if (previous == NULL) previous = temp;
                     previousDel = previous;
                     deleteFrom = temp;
                 } else if (temp->is_leaf) {
+                    previousDel = temp;
                     deleteFrom = NULL;
                 }
-            } else deleteFrom = NULL;
+            } else {
+                previousDel = temp;
+                deleteFrom = NULL;
+            }
+            previous = temp;
             // спускаемся
             temp = temp->children[position];
         }
