@@ -1,11 +1,11 @@
 #include "trie.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <ctype.h>
 
 struct TrieNode {
-    TrieNode *children[N]; // дети
+    char data; // символ
+    TrieNode *children[N_CHARACTERS]; // дети
     int is_leaf; // этот узел - конец слова
 };
 
@@ -17,7 +17,7 @@ struct Trie {
 Trie *create_Trie() {
     // создание дерева
     Trie *trie = (Trie *) malloc(sizeof(Trie));
-    trie->root = make_trieNode();
+    trie->root = make_trieNode(' ');
     trie->size = 0;
     return trie;
 }
@@ -29,19 +29,24 @@ Trie *clear_trie(Trie *trie) {
     return trie;
 }
 
-TrieNode *make_trieNode() {
+TrieNode *make_trieNode(char data) {
     // Создание узла
     TrieNode *node = (TrieNode *) malloc(sizeof(TrieNode));
-    for (int i = 0; i < N; i++)
+    for (int i = 0; i < N_CHARACTERS; i++)
         node->children[i] = NULL;
     node->is_leaf = 0;
+    node->data = data;
     return node;
 }
 
 
 void free_trieNode(TrieNode *node) {
     //Освобождение памяти, занимаемой узлом
-    for (int i = 0; i < N; i++) {
+    if (node == NULL) {
+        free(node);
+        return;
+    }
+    for (int i = 0; i < N_CHARACTERS; i++) {
         if (node->children[i] != NULL) {
             // очищае рукурсивно
             free_trieNode(node->children[i]);
@@ -49,6 +54,7 @@ void free_trieNode(TrieNode *node) {
             continue;
         }
     }
+    //node = NULL;
     free(node);
 }
 
@@ -57,12 +63,12 @@ int get_char_position(char ch) {
     if (isdigit(ch)) return ch_ - 48;
     //Русские буквы не работают
     //if (ch_ < 0) return ch_ + 58;
-    return (int) ch - 'a' + 10;
+    return (int) ch_ - 'a' + 10;
 }
 
 int trie_add_word(Trie *trie, char *word) {
     // вставка слова в дерево
-    if (trie->root == NULL) trie->root = make_trieNode();
+    if (trie->root == NULL) trie->root = make_trieNode(' ');
     TrieNode *temp = trie->root;
 
     for (int i = 0; word[i] != '\0'; i++) {
@@ -111,6 +117,8 @@ int trie_delete_word(Trie *trie, char *word) {
     }
 
     TrieNode *temp = trie->root;
+    TrieNode *previous;
+    TrieNode *previousDel = NULL;
 
     TrieNode *deleteFrom = NULL; // узел, который можно удалить, не повредив дерево
 
@@ -122,15 +130,37 @@ int trie_delete_word(Trie *trie, char *word) {
             return 0;
         } else {
             // проверяем, можно ли удалить этот узел, не повредив дерево
+            previous = temp;
             int j = 0;
-            for (; j < N; j++) {
-                if (j != i && temp->children[j] != NULL) break;
+            for (; j < N_CHARACTERS; j++) {
+                if (temp->children[j] != NULL) {
+                    if (temp->children[j]->data != word[i]) break;
+                }
             }
-            if (j != i && j == N && temp->children[j] == NULL) deleteFrom = temp;
+            if (j == N_CHARACTERS) {
+                if (deleteFrom == NULL && !temp->is_leaf) {
+                    previousDel = previous;
+                    deleteFrom = temp;
+                } else if (temp->is_leaf) {
+                    deleteFrom = NULL;
+                }
+            } else deleteFrom = NULL;
             // спускаемся
             temp = temp->children[position];
         }
     }
+    int j = 0;
+    for (; j < N_CHARACTERS; j++) {
+        if (temp->children[j] != NULL) {
+            break;
+        }
+    }
+    if (j == N_CHARACTERS) {
+        if (deleteFrom == NULL) {
+            previousDel = previous;
+            deleteFrom = temp;
+        }
+    } else deleteFrom = NULL;
     if (temp == NULL) {
         return 0;
     }
@@ -139,43 +169,75 @@ int trie_delete_word(Trie *trie, char *word) {
     }
 
     temp->is_leaf = 0; // удаляем слово
-    if (deleteFrom != NULL) free_trieNode(deleteFrom); // очищаем память, если возможно
+    if (deleteFrom != NULL) {
+        if (deleteFrom == trie->root) deleteFrom = deleteFrom->children[get_char_position(word[0])];
+        int i = 0;
+        for (; previousDel->children[i] != deleteFrom; i++);
+        previousDel->children[i] = NULL;
+        free_trieNode(deleteFrom);// очищаем память, если возможно
+    }
     trie->size--;
     return 1;
 }
 
-char get_char(int position) {
-    if (position < 10) return position + 48;
-    return position + 'a' - 10;
+wchar_t *concat(wchar_t *s1, wchar_t *s2) {
+    const size_t len1 = wcslen(s1);
+    const size_t len2 = wcslen(s2);
+    wchar_t *result = malloc((len1 + len2 + 1) * sizeof(result)); // +1 для '\0'
+    wcscpy(result, s1);
+    wcscat(result, s2);
+    return result;
 }
 
-void trie_print_(TrieNode *root, char *str, int level) {
-    // Если узел является концом слова, то добавляем символ конца строки и выводим на экран
-    if (root->is_leaf) {
-        str[level] = '\0';
-        printf("%s\n", str);
+void trie_print_(wchar_t *prefix, int isTail, TrieNode *node) {
+    wchar_t *suffix;
+    wchar_t *fix;
+    if (isTail) {
+        suffix = L"    ";
+        fix = L"└── ";
+    } else {
+        suffix = L"│   ";
+        fix = L"├── ";
     }
 
-    int i;
-    // перебераем все символы
-    for (i = 0; i < N; i++) {
-        // если можно спуститься ниже, то добавляем символ в строку
-        // и спускаемся на уровень ниже и  рекурсивно вызваем печать
-        if (root->children[i] != NULL) {
-            str[level] = get_char(i);
-            trie_print_(root->children[i], str, level + 1);
+    wchar_t *data = L"";
+    if (node->is_leaf) {
+        data = L"<-";
+    }
+
+    wprintf(L"%s%s%c%s\n", prefix, fix, node->data, data);
+
+    int size = 0;
+    for (int i = 0; i < N_CHARACTERS; i++) {
+        if (node->children[i] != NULL) size++;
+    }
+
+    for (int i = 0; i < N_CHARACTERS && size > 1; i++) {
+        if (node->children[i] != NULL) {
+            size--;
+            wchar_t *new_prefix = concat(prefix, suffix);
+            trie_print_(new_prefix, 0, node->children[i]);
+            free(new_prefix);
         }
+    }
+    if (size != 0) {
+        int last = 0;
+        for (int i = 0; i < N_CHARACTERS; i++) {
+            if (node->children[i] != NULL) {
+                last = i;
+            }
+        }
+        wchar_t *new_prefix = concat(prefix, suffix);
+        trie_print_(new_prefix, 1, node->children[last]);
+        free(new_prefix);
     }
 }
 
 void trie_print(Trie *trie) {
     if (trie->size == 0) {
-        printf("Дерево пусто!\n");
+        wprintf(L"Trie is empty!\n\n");
         return;
     }
-    char *str;
-    int level = 0;
-    str = (char *) malloc(MAX_WORD_LENGTH * sizeof(char));
-    trie_print_(trie->root, str, level);
-    free(str);
+    wchar_t *prefix = L"";
+    trie_print_(prefix, 1, trie->root);
 }

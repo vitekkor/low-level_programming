@@ -1,11 +1,11 @@
-#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <fcntl.h>
 #include "trie.h"
 #include "cmd_parser.h"
 
 int main() {
-    SetConsoleOutputCP(CP_UTF8);
+    _setmode(_fileno(stdout), _O_U16TEXT);
     Trie *trie = create_Trie();
     char *line;
     line = malloc(MAX_WORD_LENGTH * sizeof(char));
